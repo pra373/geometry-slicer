@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { ModelLoader } from './loader';
+import { CutManager } from './cutManager';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111111);
@@ -40,7 +41,7 @@ scene.add(cube);
 
 let currentModel: THREE.Object3D = cube;
 
-const loader = new GLTFLoader();
+const modelLoader = new ModelLoader();
 const fileInput = document.createElement('input');
 fileInput.type = 'file';
 fileInput.accept = '.glb,.gltf';
@@ -48,13 +49,30 @@ fileInput.style.cssText = 'position:fixed;top:10px;left:10px;';
 fileInput.onchange = async () => {
   const file = fileInput.files?.[0];
   if (!file) return;
-  const url = URL.createObjectURL(file);
-  const gltf = await loader.loadAsync(url);
+  const model = await modelLoader.loadFromFile(file);
   scene.remove(currentModel);
-  scene.add(gltf.scene);
-  currentModel = gltf.scene;
+  scene.add(model);
+  currentModel = model;
 };
 document.body.appendChild(fileInput);
+
+const cutManager = new CutManager(controls);
+
+const hud = document.createElement('div');
+hud.style.cssText =
+  'position:fixed;top:10px;right:10px;padding:8px 12px;background:rgba(0,0,0,0.6);' +
+  'color:#fff;font-family:sans-serif;font-size:14px;border-radius:4px;';
+document.body.appendChild(hud);
+
+const updateHud = (mode: string) => {
+  hud.textContent = `Mode: ${mode}  (press C to toggle)`;
+};
+updateHud(cutManager.getMode());
+cutManager.onModeChange(updateHud);
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'c' || e.key === 'C') cutManager.toggleMode();
+});
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -63,8 +81,6 @@ window.addEventListener('resize', () => {
 });
 
 renderer.setAnimationLoop(() => {
-  cube.rotation.x += 0.01;
-  cube.rotation.y += 0.013;
   controls.update();
   renderer.render(scene, camera);
 });
