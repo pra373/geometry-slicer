@@ -23,6 +23,41 @@ Reasoning:
 
 ---
 
+## Libraries Used
+
+- **three** — WebGL abstraction (scene graph, camera, materials).
+- **three/examples/jsm/controls/OrbitControls** — orbit/pan/zoom for navigate mode.
+- **three/examples/jsm/loaders/GLTFLoader** — to load arbitrary GLTF models.
+
+---
+
+## Slicing Approach
+
+All the cutting logic is handled by `MeshCutter`. You hand it a mesh and a cutting plane, and it gives you back two meshes — one for each side of the cut.
+
+The idea is pretty simple: a mesh is just a pile of triangles, so the cutter goes through them one by one and asks "is this triangle on the left of the plane, the right, or sitting across it?"
+
+To answer that, it measures the *signed distance* from each of the triangle's three vertices to the plane. Positive means one side, negative means the other.
+
+- If all three distances have the same sign, the triangle is fully on one side and goes into that side's pile as-is.
+- If the signs are mixed, the triangle straddles the plane and needs to be split.
+
+For a straddling triangle, the cutter looks at each edge where the sign flips between its two endpoints, and finds the exact point on that edge where the distance becomes zero. That's just a linear interpolation between the two endpoints, weighted by how far each one sits from the plane. New vertices are dropped at those crossing points, and the smaller shapes on each side are stitched back into triangles before being added to their piles.
+
+When the new vertices are created at edge crossings, their UVs and normals are blended from the original endpoints using the same weighting, so textures and lighting stay smooth across the cut.
+
+At the end, the two new meshes are placed back at the original position, with a tiny nudge apart along the plane normal so you can actually see they've been split.
+
+---
+
+## Shading
+
+The scene uses Three.js's built-in **physically-based shading** — no custom shaders are written. Primitives use `MeshStandardMaterial` with a roughness/metalness setup, and models loaded from GLTF keep whatever PBR materials they ship with.
+
+Lighting is intentionally minimal: one `AmbientLight` for soft fill so nothing goes pitch-black, and one `DirectionalLight` from above-front to give surfaces a clear sense of shape.
+
+---
+
 ## Work Completed So Far
 
 Current implementation progress:
@@ -41,12 +76,11 @@ Current implementation progress:
 
 ## Simplifications / Tradeoffs Due To Time Constraints
 
-- Simple file explorer based loading workflow as The catalog system is mostly a UI concern and can be added later
+Things skipped or simplified for time, in roughly the order I'd pick them up next:
 
-- Added basic lighting only. advanced lighting can be added later. 
-
-## Planned Next Steps
-
-1. Enable dragging of individual pieces.
+1. **Dragging of individual pieces.** Cuts work, but the resulting halves can't yet be picked up and moved.
+2. **Title screen with a Start button** before entering the 3D scene.
+3. **Model loading via a file picker** instead of a catalog/thumbnail gallery — the catalog is a UI layer and doesn't affect the cutting logic.
+4. **Basic lighting only** (ambient + one directional). Advanced lighting can be added later.
 
 ---
