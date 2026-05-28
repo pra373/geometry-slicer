@@ -1,4 +1,6 @@
+import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { MeshCutter } from './meshCutter';
 
 export type Mode = 'navigate' | 'cut';
 
@@ -10,8 +12,14 @@ export class CutManager {
   private dragStart: { x: number; y: number } | null = null;
   private svg: SVGSVGElement;
   private line: SVGLineElement;
+  private parts: THREE.Mesh[] = [];
+  private cutter = new MeshCutter();
 
-  constructor(private controls: OrbitControls) {
+  constructor(
+    private camera: THREE.PerspectiveCamera,
+    private controls: OrbitControls,
+    private scene: THREE.Scene,
+  ) {
     this.svg = document.createElementNS(SVG_NS, 'svg');
     this.svg.style.cssText =
       'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;display:none';
@@ -45,10 +53,59 @@ export class CutManager {
 
   private onPointerUp = (e: PointerEvent) => {
     if (!this.dragStart) return;
-    console.log('cut drag', this.dragStart, 'to', { x: e.clientX, y: e.clientY });
+    const end = { x: e.clientX, y: e.clientY };
+    const plane = this.buildCutPlane(this.dragStart, end);
+    this.applyCut(plane);
     this.dragStart = null;
     this.svg.style.display = 'none';
   };
+
+  private applyCut(plane: THREE.Plane): void {
+    const next: THREE.Mesh[] = [];
+    for (const part of this.parts) {
+      const [a, b] = this.cutter.cut(part, plane);
+      this.scene.remove(part);
+      part.geometry.dispose();
+      this.scene.add(a);
+      this.scene.add(b);
+      next.push(a, b);
+    }
+    this.parts = next;
+  }
+
+  setParts(meshes: THREE.Mesh[]): void {
+    for (const part of this.parts) {
+      this.scene.remove(part);
+      part.geometry.dispose();
+    }
+    this.parts = [];
+    for (const mesh of meshes) {
+      this.scene.attach(mesh);
+      this.parts.push(mesh);
+    }
+  }
+
+  private buildCutPlane(
+    start: { x: number; y: number },
+    end: { x: number; y: number },
+  ): THREE.Plane {
+    const startWorld = this.screenToWorld(start.x, start.y);
+    const endWorld = this.screenToWorld(end.x, end.y);
+    return new THREE.Plane().setFromCoplanarPoints(
+      startWorld,
+      endWorld,
+      this.camera.position.clone(),
+    );
+  }
+
+  private screenToWorld(px: number, py: number): THREE.Vector3 {
+    const ndc = new THREE.Vector3(
+      (px / window.innerWidth) * 2 - 1,
+      -(py / window.innerHeight) * 2 + 1,
+      0.5,
+    );
+    return ndc.unproject(this.camera);
+  }
 
   getMode(): Mode {
     return this.mode;

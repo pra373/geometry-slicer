@@ -37,9 +37,9 @@ const cube = new THREE.Mesh(
   new THREE.MeshStandardMaterial({ color: 0x4f9eff, roughness: 0.4, metalness: 0.1 }),
 );
 cube.position.y = 0.5;
-scene.add(cube);
 
-let currentModel: THREE.Object3D = cube;
+const cutManager = new CutManager(camera, controls, scene);
+cutManager.setParts([cube]);
 
 const modelLoader = new ModelLoader();
 const fileInput = document.createElement('input');
@@ -50,13 +50,14 @@ fileInput.onchange = async () => {
   const file = fileInput.files?.[0];
   if (!file) return;
   const model = await modelLoader.loadFromFile(file);
-  scene.remove(currentModel);
-  scene.add(model);
-  currentModel = model;
+  model.updateMatrixWorld(true);
+  const meshes: THREE.Mesh[] = [];
+  model.traverse((obj) => {
+    if ((obj as THREE.Mesh).isMesh) meshes.push(obj as THREE.Mesh);
+  });
+  cutManager.setParts(meshes);
 };
 document.body.appendChild(fileInput);
-
-const cutManager = new CutManager(controls);
 
 const hud = document.createElement('div');
 hud.style.cssText =
